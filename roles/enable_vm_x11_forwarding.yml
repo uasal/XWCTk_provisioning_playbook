@@ -1,0 +1,45 @@
+---
+# Modify sshd_config
+- name: Ensure 'X11UseLocalhost no' is set
+  lineinfile:
+    path: "{{ sshd_config_path }}"
+    regexp: '^#?X11UseLocalhost\s+yes'
+    state: absent
+  become: yes
+
+- name: Append 'X11UseLocalhost no' if not present
+  lineinfile:
+    path: "{{ sshd_config_path }}"
+    line: 'X11UseLocalhost no'
+    insertafter: EOF
+  become: yes
+
+- name: Ensure 'X11Forwarding no' is set
+  lineinfile:
+    path: "{{ sshd_config_path }}"
+    regexp: '^#?X11Forwarding\s+no'
+    state: absent
+  become: yes
+
+- name: Append 'X11Forwarding no' if not present
+  lineinfile:
+    path: "{{ sshd_config_path }}"
+    line: 'X11Forwarding no'
+    insertafter: EOF
+  become: yes
+
+# Figure out which ssh service exists (ssh or sshd)
+- name: Gather service facts
+  service_facts:
+  become: yes
+
+- name: Determine the correct SSH service
+  set_fact:
+    ssh_service_name: "{{ 'sshd' if 'sshd' in ansible_facts.services else 'ssh' }}"
+  become: yes
+
+- name: Restart SSH service
+  service:
+    name: "{{ ssh_service_name }}"
+    state: restarted
+  become: yes

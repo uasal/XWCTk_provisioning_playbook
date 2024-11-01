@@ -1,0 +1,105 @@
+---
+- name: Install OS packages for Ubuntu
+  apt:
+    name:
+    - sudo
+    - ssh
+    - build-essential
+    - gfortran
+    - udev
+    - rsync
+    - git
+    - cmake
+    - curl
+    - cpio
+    - vim
+    - nano
+    - htop
+    - strace
+    - zlib1g-dev
+    - libudev-dev
+    - libncurses5-dev
+    - libncursesw5-dev
+    - lm-sensors
+    - libreadline-dev
+    - pkg-config
+    - bison
+    - flex
+    - dialog
+    - autossh
+    - check
+    - libsubunit-dev
+    - pciutils
+    - libusb-1.0-0-dev
+    - usbutils
+    - tmux
+    - libboost-all-dev
+    - libgsl-dev
+    - bc
+    - liblog4cxx-dev
+    - chrony
+    - gdb
+    - unzip
+    - cpuset
+    - nfs-common
+    - nfs-kernel-server
+    - tree
+    - linux-headers-generic
+    - liblapack-dev
+    - liblapacke-dev
+    state: present # ensure the packages are installed
+    update_cache: yes
+  when:
+    - ansible_facts["distribution"] == "Ubuntu"
+    - ansible_facts["distribution_major_version"] in ["22", "24"]
+  become: yes
+
+- name: Install OS packages for Ubuntu 22.04
+  apt:
+    name:
+      - netcat
+    state: present
+  when: 
+    - ansible_facts["distribution"] == "Ubuntu" 
+    - ansible_facts["distribution_major_version"] == "22"
+  become: yes
+
+- name: Install OS packages for Ubuntu 24.04
+  apt:
+    name:
+      - netcat-traditional
+    state: present
+  when: 
+    - ansible_facts["distribution"] == "Ubuntu"  
+    - ansible_facts["distribution_major_version"] == "24"
+  become: yes
+
+- name: Install xauth if in a VM
+  apt:
+    name: xauth
+    state: present
+  when: 
+    - vm_kind.stdout != 'none'
+    - ansible_facts["distribution"] == 'Ubuntu'
+    - ansible_facts["distribution_major_version"] in ['22', '24']
+  become: yes
+
+- name: Install Linux headers (instrument computers use the RT kernel / headers)
+  apt:
+    name: linux-headers-generic
+    state: present
+  when: 
+    - magaox_role == "workstation"
+    - ansible_facts["distribution"] == 'Ubuntu'
+  become: yes
+
+- name: Ensure that all the necessary gcc libraries and headers are installed 
+  apt:
+    name: 
+      - gcc-aarch64-linux-gnu
+      - g++-aarch64-linux-gnu
+    state: present
+  when: 
+    - ansible_facts["architecture"] == "aarch64"
+    - ansible_facts["distribution"] == 'Ubuntu'
+  become: yes

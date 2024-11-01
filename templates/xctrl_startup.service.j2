@@ -1,0 +1,11 @@
+[Unit]
+Description=xctrl startup
+
+[Service]
+Type=oneshot
+RemainAfterExit=yes
+User=xsup
+ExecStart=/opt/conda/bin/python /usr/local/bin/xctrl -r {{ magaox_role }} startup
+
+[Install]
+WantedBy=default.target

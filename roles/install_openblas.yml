@@ -1,0 +1,56 @@
+---
+- name: Check if download file exists in cache
+  stat:
+    path: "{{ cache_dir }}/{{ download_file }}"
+  register: cache_file_stat
+  become: yes
+
+- name: Log download file exists in cache
+  debug:
+    msg: "{{ download_file }} found in {{ cache_dir }}."
+  when: cache_file_stat.stat.exists
+
+- name: Log download file doesn't exist in cache
+  debug:
+    msg: "{{ download_file }} not found in {{ cache_dir }}. Downloading."
+  when: not cache_file_stat.stat.exists
+
+- name: Download OpenBLAS if not already in cache
+  get_url:
+    url: "{{ download_url }}"
+    dest: "{{ cache_dir }}/{{ download_file }}"
+  when: not cache_file_stat.stat.exists
+  become: yes
+
+- name: Extract OpenBLAS
+  unarchive:
+    src: "{{ cache_dir }}/{{ download_file }}"
+    dest: "{{ vendor_dir }}"
+    remote_src: yes # source file is already on the host (remote) machine
+  become: yes
+
+- name: Log extraction complete
+  debug:
+    msg: "Extracted OpenBLAS"
+
+- name: Clean build dir
+  command:
+    cmd: make clean
+    chdir: "{{ dep_dir }}"
+  become: yes
+
+- name: Compile OpenBLAS with OpenMP support
+  command:
+    cmd: make USE_OPENMP=1
+    chdir: "{{ dep_dir }}"
+  become: yes
+
+- name: Install OpenBLAS to {{ install_dir }}
+  command:
+    cmd: make install PREFIX={{ install_dir }}
+    chdir: "{{ dep_dir }}"
+  become: yes
+
+- name: Log installation completion
+  debug:
+    msg: "Finished OpenBLAS source install"

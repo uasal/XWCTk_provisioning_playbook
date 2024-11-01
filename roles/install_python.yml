@@ -1,0 +1,70 @@
+---
+- name: Check if download file exists in cache
+  stat:
+    path: "{{ cache_dir }}/{{ download_file }}"
+  register: cache_file_stat
+  become: yes
+
+- name: Log download file exists in cache
+  debug:
+    msg: "{{ download_file }} found in {{ cache_dir }}."
+  when: cache_file_stat.stat.exists
+
+- name: Log download file doesn't exist in cache
+  debug:
+    msg: "{{ download_file }} not found in {{ cache_dir }}. Downloading."
+  when: not cache_file_stat.stat.exists   
+
+- name: Download Miniforge3 if not already in cache
+  get_url:
+    url: "{{ download_url }}"
+    dest: "{{ cache_dir }}/{{ download_file }}"
+  when: not cache_file_stat.stat.exists
+  become: yes
+
+- name: Get stats of {{ conda_install_path }}
+  stat:
+    path: "{{ conda_install_path }}"
+  register: conda_install_path_stat
+  become: yes
+
+- name: Run Miniforge3 installer if Conda is not already installed
+  command:
+    cmd: "bash {{ cache_dir }}/{{ download_file }} -b -p {{ conda_install_path }}"
+  when: not conda_install_path_stat.stat.exists
+  become: yes
+
+- name: Ensure proper group ownership for Conda directory
+  file:
+    path: "{{ conda_install_path }}"
+    recurse: yes
+    group: "{{ instrument_dev_group }}"
+    state: directory
+  become: yes
+
+- name: Set group write permissions and sticky bit for Conda directories
+  command:
+    cmd: "find {{ conda_install_path }} -type d -exec chmod g+rwxs {} \\;" # \ is an escape char in ansible
+  become: yes
+
+- name: Set environment variables for Conda in /etc/profile.d/conda.sh
+  copy:
+    dest: "/etc/profile.d/conda.sh"
+    content: |
+      if [ -f "{{ conda_install_path }}/etc/profile.d/conda.sh" ]; then
+          . "{{ conda_install_path }}/etc/profile.d/conda.sh"
+          CONDA_CHANGEPS1=false conda activate base
+      else
+          export PATH="{{ conda_install_path }}/bin:$PATH"
+      fi
+  become: yes
+
+- name: Configure Conda with .condarc file
+  copy:
+    dest: "{{ conda_install_path }}/.condarc"
+    content: |
+      channels:
+        - conda-forge
+      changeps1: false
+      disallowed_packages: [ qt ]
+  become: yes

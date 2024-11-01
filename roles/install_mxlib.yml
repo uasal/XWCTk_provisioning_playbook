@@ -1,0 +1,115 @@
+---
+- name: Clone the repository if it does not exist
+  git:
+    repo: "https://github.com/{{ orgname }}/{{ reponame }}.git"
+    dest: "{{ destdir }}"
+    version: "{{ commit_ish }}"
+    update: yes
+    force: no
+  register: git_clone_result
+  become: yes
+
+- name: Set correct group ownership
+  file:
+    path: "{{ destdir }}"
+    recurse: yes
+    group: "{{ instrument_dev_group }}"
+  become: yes
+
+- name: Set directory permissions
+  find:
+    paths: "{{ destdir }}"
+    recurse: yes
+  register: found_files
+  become: yes
+
+- name: Apply g+s to directories only
+  command:
+    cmd: "chmod g+s {{ item.path }}"
+  when: item.isdir
+  loop: "{{ found_files.files }}"
+  become: yes
+  no_log: true  # This gets really verbose, so suppress output
+
+- name: Update git submodules
+  command:
+    cmd: "git submodule update --init --recursive"
+    chdir: "{{ destdir }}"
+  become: yes
+
+# - name: Set MXMAKEFILE environment variable for this session
+#   environment:
+#     MXMAKEFILE: "{{ destdir }}/mk/MxApp.mk"
+
+- name: Populate ${{ destdir }}/local with example makefiles
+  command:
+    cmd: "make setup"
+    chdir: "{{ destdir }}"
+  register: make_setup_result
+  failed_when: make_setup_result.rc != 0
+  become: yes
+
+- name: Create mxlibCommonOverrides file
+  copy:
+    content: |
+      PREFIX = /usr/local
+      CXXFLAGS += -DMX_OLD_GSL $(shell pkg-config --cflags lapacke)
+      NEED_CUDA = no
+      EIGEN_CFLAGS = $(shell pkg-config --cflags eigen3)
+      USE_BLAS_FROM = openblas
+    dest: "{{ mxlibCommonOverrides }}"
+    mode: '0644'
+  become: yes
+
+- name: Compare local/Common.mk and local/Common.example.mk
+  command:
+    cmd: "diff {{ destdir }}/local/Common.mk {{ destdir }}/local/Common.example.mk"
+  register: common_mk_diff
+  failed_when: common_mk_diff.rc not in [0, 1]
+
+- name: Copy mxlibCommonOverrides to local/Common.mk if they match
+  command:
+    cmd: "mv {{ mxlibCommonOverrides }} {{ destdir }}/local/Common.mk"
+  become: yes    
+  when: common_mk_diff.rc == 0 # Common.example.mk and Common.mk match
+
+- block:
+    - name: Check if mxlibCommonOverrides matches local/Common.mk if 
+      command:
+        cmd: "diff {{ mxlibCommonOverrides }} {{ destdir }}/local/Common.mk"
+      register: common_mk_override_diff
+      failed_when: common_mk_override_diff.rc not in [0, 1]
+
+    - name: Fail if local/Common.mk has unexpected changes
+      fail:
+        msg: "Unexpected modifications in {{ destdir }}/local/Common.mk! See {{ mxlibCommonOverrides }} for suggested Common.mk"
+      when: 
+        - common_mk_override_diff.rc == 1 # mxlibCommonOverrides and Common.mk don't match 
+
+  when: common_mk_diff.rc == 1 # Common.example.mk and Common.mk don't match      
+
+- name: Compile mxlib
+  command:
+    cmd: make
+    chdir: "{{ destdir }}"
+  become: yes
+
+- name: Install xrif
+  command:
+    cmd: make install
+    chdir: "{{ destdir }}"
+  become: yes
+
+- name: Run gengithead.sh for mxlib versioning
+  command:
+    cmd: "gengithead.sh ./ ./include/mxlib_uncomp_version.h MXLIB_UNCOMP"
+    chdir: "{{ destdir }}"
+  become: yes
+
+- name: Ensure /etc/profile.d/mxmakefile.sh has MXMAKEFILE export
+  copy:
+    content: |
+      export MXMAKEFILE="{{ destdir }}/mk/MxApp.mk"
+    dest: /etc/profile.d/mxmakefile.sh
+    mode: '0644'
+  become: yes

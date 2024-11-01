@@ -1,0 +1,35 @@
+---
+- name: Set MAGAOX_ROLE environment variable
+  template:
+    src: "templates/magaox_role.sh.j2"
+    dest: "/etc/profile.d/magaox_role.sh"
+    mode: 0755
+  become: yes
+
+- name: Detect if running in a virtualized environment
+  shell: systemd-detect-virt
+  register: vm_kind
+  become: yes
+  failed_when: vm_kind.rc != 0 and vm_kind.stdout != "none" # Command returns 'none' when not in virt env
+
+- name: Debug virtualization kind
+  debug:
+    msg: "Detected virtualization: {{ vm_kind.stdout }}"
+
+# Add to /etc/bash.bashrc for non-login interactive shells
+- name: Ensure magaox_role.sh profile script is sourced in bash.bashrc
+  lineinfile:
+    path: /etc/bash.bashrc
+    line: 'source /etc/profile.d/magaox_role.sh'
+    create: yes
+    state: present
+  become: yes
+
+# Add to /etc/profile for login shells
+- name: Ensure magaox_role.sh profile script is sourced in /etc/profile
+  lineinfile:
+    path: /etc/profile
+    line: 'source /etc/profile.d/magaox_role.sh'
+    create: yes
+    state: present
+  become: yes

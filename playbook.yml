@@ -1,0 +1,190 @@
+- hosts: all
+  vars_prompt:
+    - name: magaox_role
+      prompt: "Choose the role for this machine (workstation)"
+      default: "workstation"
+      private: no
+
+  tasks:
+    - name: Print chosen role
+      debug:
+        msg: "Role chosen: {{ magaox_role }}"
+
+    - name: Set global variables
+      set_fact:
+        instrument_user: xsup
+        instrument_group: magaox
+        instrument_dev_group: magaox-dev
+        base_dir: /opt/MagAOX
+
+    - name: Set dependent global variables
+      set_fact:
+        cache_dir: "{{ base_dir }}/.cache"
+        vendor_dir: "{{ base_dir }}/vendor"
+        source_dir: "{{ base_dir }}/source"
+        app_dir: "{{ base_dir }}/apps"
+        config_dir: "{{ base_dir }}/config"
+        bin_dir: "{{ base_dir }}/bin"
+
+    - name: Check if the role is valid
+      assert:
+        that:
+          - magaox_role in ['VM', 'workstation']
+        fail_msg: "Invalid role: {{ magaox_role }}. Must be one of: VM, workstation."
+
+    - name: Proceed with valid role
+      debug:
+        msg: "Role chosen: {{ magaox_role }}"
+
+    - name: Set MAGAOX_ROLE based on user input
+      set_fact:
+        magaox_role: "{{ magaox_role }}"
+
+    - name: Gather facts about the system
+      setup: # Done automatically, but make sure here that the facts are up-to-date
+
+    - include_tasks: roles/role_and_virtualization.yml
+
+    - name: Set Git safe.directory for all directories if in VM
+      git_config:
+        name: safe.directory
+        value: '*'
+        scope: global
+      when: vm_kind.stdout != 'none'
+      become: yes
+
+    - include_tasks: roles/os_packages.yml
+
+    - include_tasks: roles/sudoers.yml
+      vars:
+        sudoers_scratch_file: /tmp/sudoers_trusted
+
+    - include_tasks: roles/user_management.yml
+      vars:
+        pub_key_path: /Users/irinastefan/.ssh/id_ed25519.pub
+
+    - include_tasks: roles/xsup_aliases.yml
+      vars:
+        xsup_scratch_file: /tmp/sudoers_xsup    
+
+    # - include_tasks: roles/watcher_limits.yml
+
+    - include_tasks: roles/build_dir_structure.yml
+
+    - include_tasks: roles/enable_vm_x11_forwarding.yml
+      vars:
+        sshd_config_path: /etc/ssh/sshd_config    
+      when: magaox_role == "workstation" and vm_kind.stdout != "wsl"
+
+    - include_tasks: roles/configure_ssh.yml # Update configuration for user, not root
+      vars:
+        user_ssh_dir: "{{ ansible_env.HOME }}/.ssh"
+        known_hosts_file: "{{ user_ssh_dir }}/known_hosts"
+        ssh_config_file: "{{ user_ssh_dir }}/config"
+      when: magaox_role == "workstation"
+
+    - include_tasks: "roles/install_gui_dependencies.yml"
+
+    - include_tasks: "roles/install_openblas.yml"
+      vars:
+        version: "0.3.24"
+        download_file: "OpenBLAS-{{ version }}.tar.gz"
+        download_url: "https://github.com/xianyi/OpenBLAS/releases/download/v{{ version }}/{{ download_file }}"
+        dep_dir: "{{ vendor_dir }}/OpenBLAS-{{ version }}"
+        install_dir: "/usr/local"
+
+    - include_tasks: "roles/install_fftw.yml"
+      vars:
+        version: "3.3.8"
+        download_file: "fftw-{{ version }}.tar.gz"
+        download_url: "http://fftw.org/{{ download_file }}"
+        dep_dir: "{{ vendor_dir }}/fftw-{{ version }}"
+
+    - include_tasks: "roles/install_cfitsio.yml"
+      vars:
+        version: "3.47"
+        download_file: "cfitsio-{{ version }}.tar.gz"
+        download_url: "http://heasarc.gsfc.nasa.gov/FTP/software/fitsio/c/{{ download_file }}"
+        dep_dir: "{{ vendor_dir }}/cfitsio-{{ version }}"
+
+    - include_tasks: "roles/install_eigen.yml"
+      vars:
+        version: "3.3.4"
+        download_file: "eigen-{{ version }}.tar.gz"
+        download_url: "https://gitlab.com/libeigen/eigen/-/archive/{{ version }}/eigen-{{ version }}.tar.gz"
+        dep_dir: "{{ vendor_dir }}/eigen-{{ version }}"
+
+    - include_tasks: "roles/install_flatbuffers.yml"
+      vars:
+        version: "23.5.26"
+        download_file: "flatbuffers-{{ version }}.tar.gz"
+        download_url: "https://github.com/google/flatbuffers/archive/v{{ version }}.tar.gz"
+        dep_dir: "{{ vendor_dir }}/flatbuffers-{{ version }}"
+
+    - include_tasks: "roles/install_python.yml"
+      vars:
+        version: "24.3.0-0"
+        download_file: "Miniforge3-{{ version }}-Linux-{{ ansible_facts['architecture'] }}.sh"
+        download_url: "https://github.com/conda-forge/miniforge/releases/download/{{ version }}/{{ download_file }}"
+        conda_install_path: "/opt/conda"
+        instrument_dev_group: "magaox-dev"
+
+    - include_tasks: "roles/configure_python.yml"
+      vars:
+        pinned_env_file: "conda_env_pinned_{{ ansible_facts['architecture'] | lower }}.yml"
+
+    - include_tasks: "roles/install_milk.yml" # Sudo not needed
+      vars:
+        orgname: stefi07
+        reponame: milk
+        commit_ish: fix_cmake
+        destdir: "{{ source_dir }}/{{ reponame }}"
+        python_exe: /opt/conda/bin/python
+        milk_suffix: bin/milk
+        milk_shm_dir: /milk/shm
+
+    - include_tasks: "roles/install_xrif.yml" # Sudo not needed
+      vars:
+        orgname: jaredmales
+        reponame: xrif
+        commit_ish: 2d0196246ecc2ae6bbc353c02959bde8b5e380b9
+        destdir: "{{ source_dir }}/{{ reponame }}"
+
+    - include_tasks: "roles/install_mxlib.yml" # Sudo not needed
+      vars:
+        orgname: jaredmales
+        reponame: mxlib
+        commit_ish: magaox
+        destdir: "{{ source_dir }}/{{ reponame }}"
+        mxlibCommonOverrides: "/tmp/{{ ansible_date_time.epoch }}-mxlibCommon.mk"
+
+    # # _Float16 not supported on VM
+    # - include_tasks: "roles/install_instGraph.yml" # Sudo not needed
+    #   vars:
+    #     orgname: jaredmales
+    #     reponame: instGraph
+    #     commit_ish: main
+    #     destdir: "{{ source_dir }}/{{ reponame }}"
+
+    - name: Clone ESCapps if it doesn't exist
+      git:
+        repo: "https://github.com/uasal/ESCapps.git"
+        dest: "{{ app_dir }}/ESCapps"
+        version: "main"
+        update: yes
+        force: no
+      become: yes
+
+    - include_tasks: "roles/install_XWCTk.yml"
+      vars:
+        orgname: uasal
+        reponame: XWCToolkit
+        commit_ish: main
+        destdir: "{{ source_dir }}/{{ reponame }}"
+
+    - include_tasks: "roles/build_apps.yml"
+      vars:
+        reponame: ESCapps
+        destdir: "{{ app_dir }}/{{ reponame }}"
+
+    - include_tasks: "roles/configure.yml"

@@ -1,0 +1,65 @@
+---
+- name: Check if download file exists in cache
+  stat:
+    path: "{{ cache_dir }}/{{ download_file }}"
+  register: cache_file_stat
+  become: yes
+
+- name: Log download file exists in cache
+  debug:
+    msg: "{{ download_file }} found in {{ cache_dir }}."
+  when: cache_file_stat.stat.exists
+
+- name: Log download file doesn't exist in cache
+  debug:
+    msg: "{{ download_file }} not found in {{ cache_dir }}. Downloading."
+  when: not cache_file_stat.stat.exists   
+
+- name: Download Eigen if not already in cache
+  get_url:
+    url: "{{ download_url }}"
+    dest: "{{ cache_dir }}/{{ download_file }}"
+  when: not cache_file_stat.stat.exists
+  become: yes 
+
+- name: Extract Eigen
+  unarchive:
+    src: "{{ cache_dir }}/{{ download_file }}"
+    dest: "{{ vendor_dir }}"
+    remote_src: yes # source file is already on the host (remote) machine
+  become: yes
+
+- name: Check if extracted folder has expected name
+  stat:
+    path: "{{ dep_dir }}"
+  register: eigen_folder_stat
+  become: yes
+
+- name: If extracted folder has a different name, move it to standardize
+  command:
+    cmd: mv eigen-* "{{ dep_dir }}/"
+    chdir: "{{ vendor_dir }}"
+  when: not eigen_folder_stat.stat.exists
+  become: yes
+
+- name: Log extraction complete
+  debug:
+    msg: "Extracted eigen"
+
+- name: Ensure Eigen build directory exists
+  file:
+    path: "{{ dep_dir }}/_build"
+    state: directory
+  become: yes
+
+- name: Run CMake in the build directory
+  command:
+    cmd: cmake ..
+    chdir: "{{ dep_dir }}/_build"
+  become: yes
+
+- name: Install Eigen
+  command:
+    cmd: make install
+    chdir: "{{ dep_dir }}/_build"
+  become: yes

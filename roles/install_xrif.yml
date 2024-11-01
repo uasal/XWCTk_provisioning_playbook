@@ -1,0 +1,80 @@
+---
+- name: Clone the repository if it does not exist
+  git:
+    repo: "https://github.com/{{ orgname }}/{{ reponame }}.git"
+    dest: "{{ destdir }}"
+    version: "{{ commit_ish }}"
+    update: yes
+    force: no
+  register: git_clone_result
+  become: yes
+
+- name: Set correct group ownership
+  file:
+    path: "{{ destdir }}"
+    recurse: yes
+    group: "{{ instrument_dev_group }}"
+  become: yes
+
+- name: Set directory permissions
+  find:
+    paths: "{{ destdir }}"
+    file_type: directory    
+    recurse: yes
+  register: found_files
+  become: yes
+
+- name: Apply g+s to directories only
+  command:
+    cmd: "chmod g+s {{ item.path }}"
+  when: item.isdir
+  loop: "{{ found_files.files }}"
+  become: yes
+  no_log: true  # This gets really verbose, so suppress output
+
+- name: Update git submodules
+  command:
+    cmd: "git submodule update --init --recursive"
+    chdir: "{{ destdir }}"
+  become: yes
+
+- name: Clean build directory
+  file:
+    path: "{{ destdir }}/_build"
+    state: absent
+  become: yes
+
+- name: Create _build directory
+  file:
+    path: "{{ destdir }}/_build"
+    state: directory
+  become: yes
+
+- name: Prepare build environment
+  command:
+    cmd: cmake ..
+    chdir: "{{ destdir }}/_build"
+  become: yes
+
+- name: Compile xrif
+  command:
+    cmd: make
+    chdir: "{{ destdir }}/_build"
+  become: yes
+
+- name: Compile make test
+  command:
+    cmd: make test
+    chdir: "{{ destdir }}/_build"
+  become: yes
+
+- name: Install xrif
+  command:
+    cmd: make install
+    chdir: "{{ destdir }}/_build"
+  become: yes
+
+- name: Run ldconfig
+  command:
+    cmd: ldconfig
+  become: yes

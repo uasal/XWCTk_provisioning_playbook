@@ -1,0 +1,51 @@
+---
+- name: Create scratch file for trusted sudoers configuration
+  copy:
+    dest: "{{ sudoers_scratch_file }}"
+    content: |
+      # file automatically created by Ansible, do not edit
+    mode: '400'
+  become: yes
+
+- name: Fail if the OS is not recognized
+  fail:
+    msg: "Got ID={{ ansible_facts['distribution'] }}, only know Ubuntu"
+  when: ansible_facts["distribution"] not in ['Ubuntu',]
+
+- name: Set user alias for trusted users based on distribution
+  block:
+    - name: Set up user alias for Ubuntu
+      lineinfile:
+        path: "{{ sudoers_scratch_file }}"
+        line: 'User_Alias TRUSTED = %sudo'
+      when: ansible_facts["distribution"] == 'Ubuntu'
+  become: yes
+
+- name: Append default settings to the scratch file
+  lineinfile:
+    path: "{{ sudoers_scratch_file }}"
+    line: "{{ item }}"
+  loop:
+    - 'Defaults:TRUSTED !env_reset'
+    - 'Defaults:TRUSTED !secure_path'
+  become: yes
+
+- name: Validate sudoers syntax
+  command: visudo -cf "{{ sudoers_scratch_file }}"
+  register: visudo_check
+  failed_when: visudo_check.rc != 0
+  become: yes
+
+- name: Move trusted sudoers configuration to /etc/sudoers.d/trusted
+  command: mv "{{ sudoers_scratch_file }}" /etc/sudoers.d/trusted
+  when: visudo_check.rc == 0
+  become: yes
+
+- name: Set ownership and permissions for /etc/sudoers.d/trusted
+  file:
+    path: /etc/sudoers.d/trusted
+    owner: root
+    group: root
+    mode: '0440'
+  when: visudo_check.rc == 0
+  become: yes

@@ -1,0 +1,80 @@
+---
+- name: Add proclist_role.txt file
+  template:
+    src: "templates/proclist.txt.j2"
+    dest: "{{ config_dir }}/proclist_{{ magaox_role }}.txt"
+    owner: root
+    group: "{{ instrument_dev_group }}"
+    mode: '0775'
+  become: yes
+
+- name: Add magaox.conf file
+  copy:
+    src: "files/magaox.conf"
+    dest: "{{ config_dir }}/magaox.conf"
+    owner: root
+    group: "{{ instrument_dev_group }}"
+    mode: '0664'
+  become: yes
+
+- name: Add isrole.conf file
+  copy:
+    src: "files/is.conf"
+    dest: "{{ config_dir }}/is{{ magaox_role }}.conf"
+    owner: root
+    group: "{{ instrument_dev_group }}"
+    mode: '0775'
+  become: yes
+
+- name: Add fsmCtrl.conf file
+  copy:
+    src: "files/fsmCtrl.conf"
+    dest: "{{ config_dir }}/fsmCtrl.conf"
+    owner: root
+    group: "{{ instrument_dev_group }}"
+    mode: '0664'
+  become: yes
+
+- name: Add pdu_sim.conf file
+  copy:
+    src: "files/pdu_sim.conf"
+    dest: "{{ config_dir }}/pdu_sim.conf"
+    owner: root
+    group: "{{ instrument_dev_group }}"
+    mode: '0664'
+  become: yes
+
+- name: Add write_magaox_pidfile executable
+  copy:
+    src: "files/write_magaox_pidfile"
+    dest: "{{ bin_dir }}/write_magaox_pidfile"
+    mode: '0755'
+  become: yes
+
+- name: Add xctrl executable
+  copy:
+    src: "files/xctrl"
+    dest: "{{ bin_dir }}/xctrl"
+    mode: '0755'
+  become: yes
+
+- name: Symlink xctrl executable to bin
+  file:
+    src: "{{ bin_dir }}/xctrl"
+    dest: "/usr/local/bin/xctrl"
+    state: link
+  become: yes
+
+- name: Add xctrl service file
+  template:
+    src: "templates/xctrl_startup.service.j2"
+    dest: "/etc/systemd/system/xctrl_startup.service"
+  become: yes
+
+- name: Start xctrl service
+  systemd:
+    daemon_reload: true
+    name: xctrl_startup
+    state: started
+    enabled: true
+  become: yes

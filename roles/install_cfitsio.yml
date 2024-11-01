@@ -1,0 +1,62 @@
+---
+- name: Check if download file exists in cache
+  stat:
+    path: "{{ cache_dir }}/{{ download_file }}"
+  register: cache_file_stat
+  become: yes
+
+- name: Log download file exists in cache
+  debug:
+    msg: "{{ download_file }} found in {{ cache_dir }}."
+  when: cache_file_stat.stat.exists
+
+- name: Log download file doesn't exist in cache
+  debug:
+    msg: "{{ download_file }} not found in {{ cache_dir }}. Downloading."
+  when: not cache_file_stat.stat.exists   
+
+- name: Download cfitsio if not already in cache
+  get_url:
+    url: "{{ download_url }}"
+    dest: "{{ cache_dir }}/{{ download_file }}"
+  when: not cache_file_stat.stat.exists
+  become: yes
+
+- name: Extract cfitsio
+  unarchive:
+    src: "{{ cache_dir }}/{{ download_file }}"
+    dest: "{{ vendor_dir }}"
+    remote_src: yes # source file is already on the host (remote) machine
+  become: yes
+
+- name: Log extraction complete
+  debug:
+    msg: "Extracted cfitsio"
+
+- name: Configure cfitsio
+  command:
+    cmd: ./configure --prefix=/usr/local
+    chdir: "{{ dep_dir }}"
+  become: yes
+
+- name: Compile cfitsio
+  command:
+    cmd: make
+    chdir: "{{ dep_dir }}"
+  become: yes   
+
+- name: Compile shared cfitsio
+  command:
+    cmd: make shared
+    chdir: "{{ dep_dir }}"
+  become: yes
+
+- name: Install cfitsio
+  command:
+    cmd: make install
+    chdir: "{{ dep_dir }}"
+  become: yes
+
+- name: Log installation completion
+  debug:
+    msg: "Finished cfitsio source install"

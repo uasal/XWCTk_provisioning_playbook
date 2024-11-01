@@ -1,0 +1,196 @@
+---
+- name: Check if download file exists in cache
+  stat:
+    path: "{{ cache_dir }}/{{ download_file }}"
+  register: cache_file_stat
+  become: yes
+
+- name: Log download file exists in cache
+  debug:
+    msg: "{{ download_file }} found in {{ cache_dir }}."
+  when: cache_file_stat.stat.exists
+
+- name: Log download file doesn't exist in cache
+  debug:
+    msg: "{{ download_file }} not found in {{ cache_dir }}. Downloading."
+  when: not cache_file_stat.stat.exists   
+
+- name: Download FFTW if not already in cache
+  get_url:
+    url: "{{ download_url }}"
+    dest: "{{ cache_dir }}/{{ download_file }}"
+  when: not cache_file_stat.stat.exists
+  become: yes
+
+- name: Extract FFTW
+  unarchive:
+    src: "{{ cache_dir }}/{{ download_file }}"
+    dest: "{{ vendor_dir }}"
+    remote_src: yes # source file is already on the host (remote) machine
+  become: yes
+
+- name: Log extraction complete
+  debug:
+    msg: "Extracted FFTW"
+
+
+- name: Configure FFTW for float precision
+  command: 
+    cmd: ./configure --enable-float --with-combined-threads --enable-threads --enable-shared
+    chdir: "{{ dep_dir }}"
+  register: configure_result
+  become: yes
+
+- name: Check configure for float precision result
+  fail:
+    msg: "Configuration failed with error: {{ configure_result.stderr }}"
+  when: configure_result.rc != 0
+
+- name: Build FFTW for float precision
+  command: make
+  args:
+    chdir: "{{ dep_dir }}"
+  register: make_result
+  become: yes
+
+- name: Check make for float precision result
+  fail:
+    msg: "Make failed with error: {{ make_result.stderr }}"
+  when: make_result.rc != 0
+
+- name: Install FFTW for float precision
+  command: make install
+  args:
+    chdir: "{{ dep_dir }}"
+  register: install_result
+  become: yes
+
+- name: Check install for float precision result
+  fail:
+    msg: "Installation failed with error: {{ install_result.stderr }}"
+  when: install_result.rc != 0
+
+
+
+- name: Configure FFTW for double precision
+  command: 
+    cmd: ./configure --with-combined-threads --enable-threads --enable-shared
+    chdir: "{{ dep_dir }}"
+  register: configure_result
+  become: yes
+
+- name: Check configure for double precision result
+  fail:
+    msg: "Configuration failed with error: {{ configure_result.stderr }}"
+  when: configure_result.rc != 0
+
+- name: Build FFTW for double precision
+  command: make
+  args:
+    chdir: "{{ dep_dir }}"
+  register: make_result
+  become: yes
+
+- name: Check make for double precision result
+  fail:
+    msg: "Make failed with error: {{ make_result.stderr }}"
+  when: make_result.rc != 0
+
+- name: Install FFTW for double precision
+  command: make install
+  args:
+    chdir: "{{ dep_dir }}"
+  register: install_result
+  become: yes
+
+- name: Check install for double precision result
+  fail:
+    msg: "Installation failed with error: {{ install_result.stderr }}"
+  when: install_result.rc != 0
+  
+
+
+- name: Configure FFTW for long double precision
+  command: 
+    cmd: ./configure --enable-long-double --with-combined-threads --enable-threads --enable-shared
+    chdir: "{{ dep_dir }}"
+  register: configure_result
+  become: yes
+
+- name: Check configure for long double precision result
+  fail:
+    msg: "Configuration failed with error: {{ configure_result.stderr }}"
+  when: configure_result.rc != 0
+
+- name: Build FFTW for long double precision
+  command: make
+  args:
+    chdir: "{{ dep_dir }}"
+  register: make_result
+  become: yes
+
+- name: Check make for long double precision result
+  fail:
+    msg: "Make failed with error: {{ make_result.stderr }}"
+  when: make_result.rc != 0
+
+- name: Install FFTW for long double precision
+  command: make install
+  args:
+    chdir: "{{ dep_dir }}"
+  register: install_result
+  become: yes
+
+- name: Check install for long double precision result
+  fail:
+    msg: "Installation failed with error: {{ install_result.stderr }}"
+  when: install_result.rc != 0
+  
+
+
+- block:
+    - name: Configure FFTW for quad precision on x86_64
+      command: 
+        cmd: ./configure --enable-quad-precision --with-combined-threads --enable-threads --enable-shared
+        chdir: "{{ dep_dir }}"
+      register: configure_result
+
+    - name: Debug the output of find
+      debug:
+        var: configure_result
+
+    - name: Check configure for quad precision on x86_64 result
+      fail:
+        msg: "Configuration failed with error: {{ configure_result.stderr }}"
+      when: configure_result.rc != 0
+
+    - name: Build FFTW for quad precision on x86_64
+      command: make
+      args:
+        chdir: "{{ dep_dir }}"
+      register: make_result
+
+    - name: Check make for quad precision on x86_64 result
+      fail:
+        msg: "Make failed with error: {{ make_result.stderr }}"
+      when: make_result.rc != 0
+
+    - name: Install FFTW for quad precision on x86_64
+      command: make install
+      args:
+        chdir: "{{ dep_dir }}"
+      register: install_result
+
+    - name: Check install for quad precision on x86_64 result
+      fail:
+        msg: "Installation failed with error: {{ install_result.stderr }}"
+      when: install_result.rc != 0
+  
+  when: ansible_facts["architecture"] == "x86_64"
+  become: yes
+  
+
+
+- name: Log installation completion
+  debug:
+    msg: "Finished FFTW source install"

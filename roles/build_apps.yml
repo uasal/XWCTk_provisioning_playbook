@@ -1,0 +1,45 @@
+---
+
+- name: Clean build directory
+  file:
+    path: "{{ destdir }}/_build"
+    state: absent
+  become: yes
+
+- name: Create _build directory
+  file:
+    path: "{{ destdir }}/_build"
+    state: directory
+  become: yes
+
+- name: Prepare build environment
+  command:
+    cmd: cmake ..
+    chdir: "{{ destdir }}/_build"
+  become: yes
+
+- name: Compile ESCapps
+  command:
+    cmd: cmake --build .
+    chdir: "{{ destdir }}/_build"
+  become: yes
+
+- name: Install ESCapps
+  command:
+    cmd: cmake --install .
+    chdir: "{{ destdir }}/_build"
+  become: yes
+
+- name: Run ldconfig
+  command:
+    cmd: ldconfig
+  become: yes
+
+# - name: Clone app config repo
+#   git:
+#     repo: "https://github.com/uasal/ESCapps.git"
+#     dest: "{{ config_dir }}"
+#     version: "main"
+#     update: yes
+#     force: no
+#   become: yes

@@ -1,0 +1,49 @@
+---
+- name: Clone the repository if it does not exist
+  git:
+    repo: "https://github.com/{{ orgname }}/{{ reponame }}.git"
+    dest: "{{ destdir }}"
+    version: "{{ commit_ish }}"
+    update: yes
+    force: no
+  register: git_clone_result
+  become: yes
+
+- name: Clean build directory
+  file:
+    path: "{{ destdir }}/_build"
+    state: absent
+  become: yes
+
+- name: Create _build directory
+  file:
+    path: "{{ destdir }}/_build"
+    state: directory
+  become: yes
+
+- name: Prepare build environment
+  command:
+    cmd: cmake -DNOINSTGRAPH=ON ..
+    chdir: "{{ destdir }}/_build"
+  become: yes
+
+- name: Compile XWCToolkit
+  command:
+    cmd: cmake --build .
+    chdir: "{{ destdir }}/_build"
+  become: yes
+
+- name: Install XWCToolkit
+  command:
+    cmd: cmake --install .
+    chdir: "{{ destdir }}/_build"
+  become: yes
+
+- name: Run ldconfig
+  command:
+    cmd: ldconfig
+  become: yes
+
+- name: Log installation completion
+  debug:
+    msg: "Finished XWCTk source install"

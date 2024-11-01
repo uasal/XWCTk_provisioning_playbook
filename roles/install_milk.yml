@@ -1,0 +1,154 @@
+---
+- name: Clone the repository if it does not exist
+  git:
+    repo: "https://github.com/{{ orgname }}/{{ reponame }}.git"
+    dest: "{{ destdir }}"
+    version: "{{ commit_ish }}"
+    update: yes
+    force: no
+  register: git_clone_result
+  become: yes
+
+- name: Set correct group ownership
+  file:
+    path: "{{ destdir }}"
+    recurse: yes
+    group: "{{ instrument_dev_group }}"
+  become: yes
+
+- name: Set directory permissions
+  find:
+    paths: "{{ destdir }}"
+    file_type: directory
+    recurse: yes
+  register: found_files
+  become: yes
+
+- name: Apply g+s to directories only
+  command:
+    cmd: "chmod g+s {{ item.path }}"
+  when: item.isdir
+  loop: "{{ found_files.files }}"
+  become: yes
+  no_log: true  # This gets really verbose, so suppress output
+
+- name: Update git submodules
+  command:
+    cmd: "git submodule update --init --recursive"
+    chdir: "{{ destdir }}"
+  become: yes
+
+- name: Clean build directory
+  file:
+    path: "{{ destdir }}/{{ item }}"
+    state: absent
+  loop:
+    - "_build"
+    - "src/config.h"
+    - "src/milk_config.h"
+  become: yes
+
+- name: Create _build directory
+  file:
+    path: "{{ destdir }}/_build"
+    state: directory
+  become: yes
+
+- name: Prepare build environment
+  command:
+    cmd: cmake .. -DCMAKE_INSTALL_PREFIX=/usr/local -Dbuild_python_module=ON -DPYTHON_EXECUTABLE={{ python_exe }}
+    chdir: "{{ destdir }}/_build"
+  become: yes
+
+- name: Compile Milk using make
+  shell: make -j $(( $(nproc) / 2 ))
+  args:
+    chdir: "{{ destdir }}/_build"
+  become: yes
+
+- name: Install Milk
+  command:
+    cmd: make install
+    chdir: "{{ destdir }}/_build"
+  become: yes
+
+- name: Install ImageStreamIO
+  command: "{{ python_exe }} -m pip install src/ImageStreamIO/"
+  args:
+    chdir: "{{ destdir }}"
+  become: yes
+
+- name: Check if ImageStreamIOWrap module can be imported
+  block:
+    - name: Run Python code to check ImageStreamIOWrap import
+      command: "{{ python_exe }} -c 'import ImageStreamIOWrap'"
+      register: check_import
+      failed_when: check_import.rc != 0
+      changed_when: false
+  rescue:
+    - name: Fail the task if ImageStreamIOWrap import failed
+      fail:
+        msg: "The module ImageStreamIOWrap could not be imported."
+
+- name: Find milk binary in the install_manifest.txt
+  shell: grep -e "{{ milk_suffix }}$" ./install_manifest.txt
+  register: milk_binary_result
+  changed_when: false
+  args:
+    chdir: "{{ destdir }}/_build"
+
+- name: Set milk_binary variable
+  set_fact:
+    milk_binary: "{{ milk_binary_result.stdout }}"
+
+- name: Log milk_binary variable
+  debug:
+    msg: "milk_binary variable is {{ milk_binary }}"
+
+- name: Set milk_path variable
+  set_fact:
+    milk_path: "{{ milk_binary | regex_replace(milk_suffix | replace('/', '\\/'), '') }}" # remove the portion matching milk_suffix and ensure that any '/'' are escaped
+
+- name: Log milk_path variable
+  debug:
+    msg: "milk_path variable is {{ milk_path }}"
+
+- name: Create symlink for milk
+  file:
+    src: "{{ milk_path }}"
+    dest: "/usr/local/milk"
+    state: link
+  become: yes
+
+- name: Add milk to ld.so.conf
+  copy:
+    content: "/usr/local/milk/lib\n"
+    dest: /etc/ld.so.conf.d/milk.conf
+    remote_src: yes  # The source file is already on the remote host;
+  become: yes
+
+- name: Run ldconfig
+  command: ldconfig
+  become: yes
+
+- name: Set environment variables for Milk
+  copy:
+    content: |
+      export PATH="$PATH:/usr/local/milk/bin"
+      export PKG_CONFIG_PATH=$PKG_CONFIG_PATH:/usr/local/milk/lib/pkgconfig
+      export MILK_SHM_DIR=/milk/shm
+      export MILK_ROOT={{ destdir }}
+      export MILK_INSTALLDIR=/usr/local/milk
+    dest: /etc/profile.d/milk.sh
+  become: yes
+
+- name: Ensure shared memory directory exists and is writable
+  file:
+    path: "{{ milk_shm_dir }}"
+    state: directory
+    mode: '0777'
+  become: yes
+
+- name: Log installation completion
+  debug:
+    msg: "Finished milk source install"

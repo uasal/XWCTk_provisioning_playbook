@@ -1,0 +1,168 @@
+---
+- name: Create base_dir (defaults to /opt/MagAOX)
+  file:
+    path: "{{ base_dir }}"
+    state: directory
+    owner: root
+    group: root
+    recurse: yes
+  become: yes
+
+- name: Create directory /opt/MagAOX/.cache
+  file:
+    path: "{{ base_dir }}/.cache"
+    state: directory
+    mode: "u=rwX,g=rwsX,o=rX"
+    owner: root
+    group: "{{ instrument_dev_group }}"
+    recurse: yes
+  become: yes
+
+- name: Create directory /opt/MagAOX/bin
+  file:
+    path: "{{ base_dir }}/bin"
+    state: directory    
+    owner: root
+    group: root
+    mode: "u+rwX,g+rX,o+rX"
+    recurse: no
+  become: yes
+
+- name: Create directory /opt/MagAOX/calib
+  file:
+    path: "{{ base_dir }}/calib"
+    state: directory
+    owner: root
+    group: "{{ instrument_group }}"
+    mode: "u=rwX,g=rwX,o=rX"
+    recurse: yes
+  become: yes
+
+- name: Create directory /opt/MagAOX/config
+  file:
+    path: "{{ base_dir }}/config"
+    state: directory
+    owner: root
+    group: "{{ instrument_dev_group }}"
+    mode: "u=rwX,g=rwX,o=rX"
+    recurse: yes
+  become: yes
+
+- name: Create directory /opt/MagAOX/drivers
+  file:
+    path: "{{ base_dir }}/drivers"
+    state: directory    
+    owner: root
+    group: root
+    mode: "u=rwX,g=rwX,o=rX"
+    recurse: yes
+  become: yes
+
+- name: Create directory /opt/MagAOX/drivers/fifos
+  file:
+    path: "{{ base_dir }}/drivers/fifos"
+    state: directory
+    owner: root
+    group: "{{ instrument_group }}"
+    mode: "u=rwX,g=rwX,o=rX"
+    recurse: yes
+  become: yes
+
+- name: Create directory /opt/MagAOX/logs
+  file:
+    path: "{{ base_dir }}/logs"
+    state: directory
+    owner: "{{ instrument_user }}"
+    group: "{{ instrument_group }}"
+    mode: "u=rwX,g=rwX,o=rX"
+    recurse: yes
+    follow: no # Do not follow symlinks, apply to the symlink itself if encountered
+  become: yes
+
+- name: Create directory /opt/MagAOX/rawimages
+  file:
+    path: "{{ base_dir }}/rawimages"
+    state: directory
+    owner: "{{ instrument_user }}"
+    group: "{{ instrument_group }}"
+    mode: "u=rwX,g=rwX,o=rX"
+    recurse: yes
+    follow: no # Do not follow symlinks, apply to the symlink itself if encountered
+  become: yes
+
+- name: Create directory /opt/MagAOX/telem
+  file:
+    path: "{{ base_dir }}/telem"
+    state: directory
+    owner: "{{ instrument_user }}"
+    group: "{{ instrument_group }}"
+    mode: "u=rwX,g=rwX,o=rX"
+    recurse: yes
+    follow: no # Do not follow symlinks, apply to the symlink itself if encountered
+  become: yes
+
+- name: Set ownership for /opt/MagAOX/secrets
+  file:
+    path: "{{ base_dir }}/secrets"
+    state: directory
+    owner: root
+    group: root
+    mode: "u=rwX,g=X,o=X"
+    recurse: yes
+  become: yes
+
+- name: Set ownership for /opt/MagAOX/source
+  file:
+    path: "{{ base_dir }}/source"
+    state: directory
+    owner: root
+    group: "{{ instrument_dev_group }}"
+    mode: "u+rwX,g+rwX,o+rX"
+    recurse: yes
+  become: yes
+
+- name: Set ownership for /opt/MagAOX/sys
+  file:
+    path: "{{ base_dir }}/sys"
+    state: directory
+    owner: root
+    group: root
+    mode: "u=rwX,g=rX,o=rX"
+    recurse: yes
+  become: yes
+
+- name: Set ownership for /opt/MagAOX/vendor
+  file:
+    path: "{{ base_dir }}/vendor"
+    state: directory    
+    owner: root
+    group: "{{ instrument_dev_group }}"
+    mode: "u=rwX,g=rwX,o=rX"
+    recurse: yes
+  become: yes
+
+# Set the setgid bit and r+x permissions to all directories within the specified directory. 
+# It ensures group members can access these directories, and all newly created files within them inherit the group ID. 
+- name: Find all directories in the target paths
+  find:
+    paths: "{{ item }}"  # Iterate over each directory specified in the loop
+    recurse: yes
+    file_type: directory
+  register: dirs_found
+  loop:
+    - "/opt/MagAOX/calib"
+    - "/opt/MagAOX/config"
+    - "/opt/MagAOX/logs"
+    - "/opt/MagAOX/rawimages"
+    - "/opt/MagAOX/source"
+    - "/opt/MagAOX/telem"
+    - "/opt/MagAOX/vendor"
+  become: yes
+
+- name: Set setgid and group permissions on found directories
+  file:
+    path: "{{ item.path }}"
+    mode: "g+rxs"  # Set gid bit (g+s), and group read + execute (g+rx)
+  loop: "{{ dirs_found.results | map(attribute='files') | flatten }}" # extract only files and flatten from the directories found by find
+  when: (dirs_found.results | map(attribute='matched') | sum) > 0  # Apply only if directories are found
+  become: yes

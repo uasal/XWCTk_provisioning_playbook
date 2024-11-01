@@ -1,0 +1,13 @@
+tests:
+  hosts:
+    # E.g.
+    # multipass_test:
+      # ansible_host: 192.168.64.19
+      # ansible_user: ubuntu
+    
+    # Duplicate as many times as needed and
+    # update with appropriate values, e.g.
+    host_01:
+      ansible_host:
+      # User must have sudo access
+      ansible_user:

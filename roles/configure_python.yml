@@ -1,0 +1,20 @@
+---
+- name: Copy pinned environment file to the remote host
+  copy:
+    src: "{{ playbook_dir }}/files/{{ pinned_env_file }}"  # Path on the control machine
+    dest: "/tmp/pinned_env_file.yml"  # Destination on the remote host
+  become: yes
+
+- name: Update Conda environment using Mamba
+  shell: |
+    source /opt/conda/bin/activate base && mamba env update -f /tmp/pinned_env_file.yml
+  args:
+    executable: /bin/bash
+  register: mamba_update_result
+  ignore_errors: yes  # Allow the playbook to continue even if this task fails
+  become: yes
+
+- name: Handle Mamba update failure
+  fail:
+    msg: "Failed to install or update packages using pinned versions. Update the environment manually with the base specification and update the pinned versions if possible."
+  when: mamba_update_result.rc != 0

@@ -1,0 +1,60 @@
+---
+- name: Create sudoers configuration for xsup
+  copy:
+    dest: "{{ xsup_scratch_file }}"
+    content: |
+      # keep MAGAOX_ROLE set for any sudo'd command
+      Defaults env_keep += "MAGAOX_ROLE"
+      # keep entire environment when becoming xsup
+      Defaults>xsup !env_reset
+      Defaults>xsup !secure_path
+      # disable password authentication to become xsup
+      %magaox ALL = (xsup) NOPASSWD: ALL
+      %magaox ALL = (root) NOPASSWD: /opt/MagAOX/bin/write_magaox_pidfile
+    mode: '0440'
+  become: yes
+
+- name: Validate sudoers syntax
+  command: visudo -cf "{{ xsup_scratch_file }}"
+  register: visudo_check
+  failed_when: visudo_check.rc != 0
+  become: yes
+
+- name: Move sudoers configuration to /etc/sudoers.d/xsup
+  command: mv "{{ xsup_scratch_file }}" /etc/sudoers.d/xsup
+  when: visudo_check.rc == 0
+  become: yes
+
+- name: Set ownership and permissions for /etc/sudoers.d/xsup
+  file:
+    path: /etc/sudoers.d/xsup
+    owner: root
+    group: root
+    mode: '0440'
+  when: visudo_check.rc == 0
+  become: yes
+
+- name: Create xsupify.sh profile script
+  template:
+    src: xsupify.sh.j2
+    dest: /etc/profile.d/xsupify.sh
+    mode: '0755'
+  become: yes
+
+# Add to /etc/bash.bashrc for non-login interactive shells
+- name: Ensure xsupify.sh profile script is sourced in bash.bashrc
+  lineinfile:
+    path: /etc/bash.bashrc
+    line: 'source /etc/profile.d/xsupify.sh'
+    create: yes
+    state: present
+  become: yes
+
+# Add to /etc/profile for login shells
+- name: Ensure xsupify.sh profile script is sourced in /etc/profile
+  lineinfile:
+    path: /etc/profile
+    line: 'source /etc/profile.d/xsupify.sh'
+    create: yes
+    state: present
+  become: yes

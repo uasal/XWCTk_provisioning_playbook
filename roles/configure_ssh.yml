@@ -1,0 +1,71 @@
+---
+- name: Check if tasks are being run as root
+  assert:
+    that: "ansible_user_id != 'root'"
+    fail_msg: "Configure ssh as a normal user, not root"
+
+- name: Create .ssh directory if it doesn't exist
+  file:
+    path: "{{ user_ssh_dir }}"
+    state: directory
+    mode: '0700'
+
+# # Probably not needed since these are MagAOX-specific hosts
+# - name: Check if known_hosts file exists
+#   stat:
+#     path: "{{ known_hosts_file }}"
+#   register: known_hosts_stat
+
+# - name: Create or update known_hosts file with predefined entries
+#   copy:
+#     dest: "{{ known_hosts_file }}"
+#     content: |
+#       rtc ecdsa-sha2-nistp256 AAAAE2VjZHNhLXNoYTItbmlzdHAyNTYAAAAIbmlzdHAyNTYAAABBBFmgoTzcAVYXDZjPFNLfpPz/T/0DQvrXSe9XOly9SD7NcjwN/fRTk+DhrWzdPN5aBsDnnmMS8lFGIcRwnlhUN6o=
+#       icc ecdsa-sha2-nistp256 AAAAE2VjZHNhLXNoYTItbmlzdHAyNTYAAAAIbmlzdHAyNTYAAABBBNpRRN65o8TcP2DnkXHdzIqAJ9CAoiz2guLSXjobx7L4meAtphb30nSx5pQqOeysU+otN9PEJH6TWr8KUXBDw6I=
+#       exao1.magao-x.org ecdsa-sha2-nistp256 AAAAE2VjZHNhLXNoYTItbmlzdHAyNTYAAAAIbmlzdHAyNTYAAABBBMsOYTn6tlmcatxt1pDfowTtBTsmJ77OMSPl3rNl8+OBKhmpVpX+iBUMKsBDwwVIlqEAa9BfJPbSrpWEWZABv3s=
+#     mode: '0600'
+#     owner: "{{ ansible_user_id }}"
+#     group: "{{ ansible_user_id }}"
+#     when: not known_hosts_stat.stat.exists
+
+# - name: Check if ssh_config_file file exists
+#   stat:
+#     path: "{{ ssh_config_file }}"
+#   register: ssh_config_stat
+
+# - name: Create or update SSH config file
+#   copy:
+#     dest: "{{ ssh_config_file }}"
+#     content: |
+#       IdentityFile ~/.ssh/id_ed25519
+#       Host aoc exao1
+#         HostName exao1.magao-x.org
+#       Host rtc exao2
+#         HostName rtc
+#         ProxyJump aoc
+#       Host icc exao3
+#         HostName icc
+#         ProxyJump aoc
+#       Host tic exao0
+#         HostName exao0.as.arizona.edu
+#       Host toc corona
+#         HostName 192.168.1.62
+#         ProxyJump exao0
+#       Host *
+#         User YOURMAGAOXUSERNAME
+#     mode: '0600'
+#     owner: "{{ ansible_user_id }}"
+#     group: "{{ ansible_user_id }}"
+#     when: not ssh_config_stat.stat.exists
+
+- name: Set correct permissions on ~/.ssh directory and files
+  file:
+    path: "{{ user_ssh_dir }}"
+    mode: '0700'
+    recurse: yes
+
+- name: Create an empty .hushlogin to prevent login messages
+  file:
+    path: "{{ ansible_env.HOME }}/.hushlogin"
+    state: touch
+    mode: '0644'

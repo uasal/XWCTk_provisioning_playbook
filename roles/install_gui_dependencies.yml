@@ -1,0 +1,47 @@
+---
+- name: Install GUI packages common to all Ubuntu versions
+  apt:
+    name:
+      - x11-apps
+      - libgl-dev
+      - qtbase5-dev
+      - qtchooser
+      - qt5-qmake
+      - qtbase5-dev-tools
+      - libqt5svg5-dev
+      - wmctrl
+      - xauth
+    state: present
+    update_cache: yes
+  when: 
+    - ansible_facts["distribution"] == "Ubuntu" 
+  become: yes
+
+- name: Install version-specific packages for Ubuntu 24.04
+  apt:
+    name: libqwtmathml-qt5-dev
+    state: present
+  when: 
+    - ansible_facts["distribution"] == "Ubuntu"  
+    - ansible_facts["distribution_major_version"] == "24"
+  become: yes
+
+- name: Install version-specific packages for Ubuntu 22.04
+  apt:
+    name: libqwt-qt5-dev
+    state: present
+  when: 
+    - ansible_facts["distribution"] == "Ubuntu" 
+    - ansible_facts["distribution_major_version"] == "22"
+  become: yes
+
+# For some reason, Qt won't hear any keyboard events unless this is set.
+# (Hinted at by: "Qt: Failed to create XKB context!")
+- name: Ensure Qt XKB config root environment variable is set
+  copy:
+    dest: /etc/profile.d/qt_xkb_config_env_var.sh
+    content: |
+      # Qt environment fix for XKB context issue
+      export QT_XKB_CONFIG_ROOT=/usr/lib/kbd/keymaps/xkb
+    # mode: '0644' # Should check what this needs to be
+  become: yes

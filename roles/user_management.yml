@@ -1,0 +1,115 @@
+---
+- name: Create user groups
+  group:
+    name: "{{ item }}"
+    state: present
+  loop:
+    - "{{ instrument_group }}"
+    - "{{ instrument_dev_group }}"
+  become: yes
+
+- name: Create user xsup if MAGAOX_ROLE is not vm
+  user:
+    name: xsup
+    state: present
+    create_home: yes  # Ensure home directory is created
+    shell: /bin/bash  # Set the shell to bash
+  become: yes
+
+# Check if .ssh directory for xsup exists
+- name: Check if .ssh directory for xsup exists
+  stat:
+    path: /home/xsup/.ssh
+  register: ssh_dir
+  become: yes
+
+# Create .ssh directory for xsup if it doesn't exist
+- name: Create .ssh directory for xsup
+  file:
+    path: /home/xsup/.ssh
+    state: directory
+    owner: xsup
+    group: "{{ instrument_group }}"
+    mode: '0700'
+  when:
+    - ssh_dir.stat.exists == false
+  become: yes
+
+# Check if authorized_keys file exists
+- name: Check if authorized_keys file for xsup exists
+  stat:
+    path: /home/xsup/.ssh/authorized_keys
+  register: auth_keys
+  become: yes
+
+# Create authorized_keys file for xsup if it doesn't exist
+- name: Create authorized_keys file for xsup
+  file:
+    path: /home/xsup/.ssh/authorized_keys
+    state: touch
+    owner: xsup
+    group: "{{ instrument_group }}"
+    mode: '0600'
+  when:
+    - auth_keys.stat.exists == false
+  become: yes
+
+# Check if the SSH key exists for xsup
+- name: Check if the SSH key exists for xsup
+  stat:
+    path: /home/xsup/.ssh/id_ed25519
+  register: ssh_key
+  become: yes
+
+# Generate SSH key only if it doesn't exist
+- name: Generate SSH key for xsup if it doesn't exist
+  user:
+    name: xsup
+    generate_ssh_key: yes
+    ssh_key_bits: 4096
+    ssh_key_type: ed25519
+  when: ssh_key.stat.exists == false
+  become: yes
+
+- name: Add SSH public key to authorized_keys if not already present
+  lineinfile:
+    path: /home/xsup/.ssh/authorized_keys
+    line: "{{ lookup('file', pub_key_path) }}"
+    state: present
+  become: yes
+
+- name: Ensure PAM configuration for su
+  lineinfile:
+    path: /etc/pam.d/su
+    line: "{{ item }}"
+    state: present
+  loop:
+    - "auth            [success=ignore default=1] pam_succeed_if.so user = xsup"
+    - "auth            sufficient      pam_succeed_if.so use_uid user ingroup magaox-dev"
+  become: yes
+
+- name: Add Ansible current user to magaox-dev group if not already a member
+  user:
+    name: "{{ ansible_env.USER }}"
+    groups: "{{ instrument_dev_group }}"
+    append: yes  # Avoid overwriting existing groups
+    state: present
+  when: ansible_env.USER != 'root'
+  become: yes
+
+- name: Add Ansible current user to magaox group if not already a member
+  user:
+    name: "{{ ansible_env.USER }}"
+    groups: "{{ instrument_group }}"
+    append: yes  # Avoid overwriting existing groups
+    state: present
+  when: ansible_env.USER != 'root'
+  become: yes
+
+- name: Add xsup to magaox group if not already a member
+  user:
+    name: "xsup"
+    groups: "{{ instrument_group }}"
+    append: yes  # Avoid overwriting existing groups
+    state: present
+  become: yes
