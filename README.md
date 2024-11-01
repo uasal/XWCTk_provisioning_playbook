@@ -16,3 +16,4 @@ The `-K` means that you will be prompted for the user's sudo password needed to 
 
 ### TODO
 - Spin out the .conf files into their own repository
+- Add GitHub Action to periodically run playbook and test
